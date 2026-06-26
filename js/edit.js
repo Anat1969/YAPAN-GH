@@ -1,98 +1,120 @@
 // ============================================================
-// edit.js — edit forms for a day and a single stop. Writes back
-// through Store (which persists to localStorage and triggers a
-// full re-render via its onChange listeners).
+//  edit.js — פעולות עריכה. הכל עובר דרך App.store.update(delta)
+//  כך כל שינוי נשמר ומשודר אוטומטית לכל המסכים.
 // ============================================================
-window.Edit = (function () {
+window.App = window.App || {};
+App.edit = (function () {
 
-  function field(label, name, value, type) {
-    const input = (type === 'textarea')
-      ? C.el('textarea.input', { name: name, rows: 3 })
-      : C.el('input.input', { name: name, type: type || 'text', value: value == null ? '' : value });
-    if (type === 'textarea') input.value = value == null ? '' : value;
-    return C.el('label.edit-field', null, [C.el('span', { text: label }), input]);
+  const S = function () { return App.store; };
+
+  // עדכון שדה בודד בפריט
+  function setField(itemId, field, value) {
+    const patch = {}; patch[field] = value;
+    S().update({ items: { [itemId]: patch } });
   }
 
-  function typeField(value) {
-    const sel = C.el('select.input', { name: 'type' });
-    Object.keys(window.TYPE_LABELS).forEach(function (k) {
-      const o = C.el('option', { value: k, text: window.TYPE_LABELS[k] });
-      if (k === value) o.selected = true;
-      sel.appendChild(o);
-    });
-    return C.el('label.edit-field', null, [C.el('span', { text: 'סוג' }), sel]);
+  function setPriority(itemId, priority) { setField(itemId, 'priority', priority); }
+  function setStatus(itemId, status) { setField(itemId, 'status', status); }
+  function setText(itemId, field, value) { setField(itemId, field, value); }
+  function setPeople(itemId, people) { setField(itemId, 'people', people); }
+  function setCoordinates(itemId, lat, lng) { setField(itemId, 'coordinates', { lat, lng }); }
+
+  // יום: עריכת שדה (תאריך, כותרת, לינה...)
+  function setDayField(dayId, field, value) {
+    const patch = {}; patch[field] = value;
+    S().update({ days: { [dayId]: patch } });
   }
 
-  function values(form) {
-    const out = {};
-    form.querySelectorAll('[name]').forEach(function (i) { out[i.name] = i.value; });
-    return out;
+  // הוספת פריט חדש
+  function addItem(over) {
+    const id = 'user-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    const item = App.normalize.makeItem(Object.assign({ id, status: 'proposed' }, over || {}));
+    const delta = { items: { [id]: item } };
+    S().update(delta);
+    // שיוך ליום אם צוין
+    if (over && over.dayId) {
+      const day = S().getDay(over.dayId);
+      if (day) {
+        const order = (day.itemOrder || []).slice();
+        order.push(id);
+        S().update({ days: { [over.dayId]: { itemOrder: order } } });
+      }
+    }
+    return id;
   }
 
-  function openDay(day) {
-    const form = C.el('form.edit-form', null, [
-      C.el('h3', { text: 'עריכת יום ' + day.gday }),
-      field('כותרת', 'title', day.title),
-      field('כותרת משנה', 'subtitle', day.subtitle),
-      field('אזור', 'area', day.area),
-      field('שעת קימה', 'wakeUp', day.wakeUp),
-      field('הסיפור', 'story', day.story, 'textarea'),
-      buttons()
-    ]);
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const v = values(form);
-      window.Store.updateDay(day.tripId, day.dayIndex, {
-        title: v.title, subtitle: v.subtitle, area: v.area, wakeUp: v.wakeUp, story: v.story
-      });
-      window.Modal.close();
-    });
-    window.Modal.open(form);
+  // מחיקת פריט
+  function deleteItem(itemId) { S().update({ deleted: [itemId] }); }
+
+  // העברת פריט מיום ליום
+  function moveItemToDay(itemId, fromDayId, toDayId, atIndex) {
+    const st = S().get();
+    const from = st.days[fromDayId], to = st.days[toDayId];
+    const days = {};
+    if (from && from.itemOrder) {
+      days[fromDayId] = { itemOrder: from.itemOrder.filter(x => x !== itemId) };
+    }
+    if (to) {
+      const order = (to.itemOrder || []).filter(x => x !== itemId);
+      if (atIndex == null || atIndex < 0) order.push(itemId);
+      else order.splice(atIndex, 0, itemId);
+      days[toDayId] = { itemOrder: order };
+    }
+    S().update({ items: { [itemId]: { dayId: toDayId } }, days });
   }
 
-  function openItem(day, itemIndex) {
-    const it = day.timeline[itemIndex] || {};
-    const form = C.el('form.edit-form', null, [
-      C.el('h3', { text: 'עריכת תחנה' }),
-      C.el('div.edit-grid', null, [
-        field('שעה', 'time', it.time),
-        field('משך', 'duration', it.duration)
-      ]),
-      field('שם', 'name', it.name),
-      field('שם באנגלית', 'nameEn', it.nameEn),
-      typeField(it.type),
-      field('למי', 'forWho', it.forWho),
-      field('תיאור', 'desc', it.desc, 'textarea'),
-      field('למה דווקא כאן', 'whyThisPlace', it.whyThisPlace, 'textarea'),
-      field('כתובת', 'address', it.address),
-      C.el('div.edit-grid', null, [
-        field('Lat', 'lat', it.lat, 'number'),
-        field('Lng', 'lng', it.lng, 'number'),
-        field('עלות ¥', 'cost', it.cost, 'number')
-      ]),
-      buttons()
-    ]);
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const v = values(form);
-      window.Store.updateItem(day.tripId, day.dayIndex, itemIndex, {
-        time: v.time, duration: v.duration, name: v.name, nameEn: v.nameEn,
-        type: v.type, forWho: v.forWho, desc: v.desc, whyThisPlace: v.whyThisPlace,
-        address: v.address,
-        lat: parseFloat(v.lat) || 0, lng: parseFloat(v.lng) || 0,
-        cost: parseInt(v.cost, 10) || 0
-      });
-      window.Modal.close();
-    });
-    window.Modal.open(form);
+  // סידור מחדש בתוך יום (העברת פריט מ-index ל-index)
+  function reorderInDay(dayId, fromIdx, toIdx) {
+    const day = S().getDay(dayId);
+    if (!day) return;
+    const order = day.itemOrder.slice();
+    const [moved] = order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, moved);
+    S().update({ days: { [dayId]: { itemOrder: order } } });
   }
 
-  function buttons() {
-    return C.el('div.edit-actions', null, [
-      C.el('button.btn', { type: 'submit', text: '💾 שמירה' }),
-      C.el('button.btn.btn-ghost', { type: 'button', text: 'ביטול', on: { click: function () { window.Modal.close(); } } })
-    ]);
+  // סידור מחדש של ימים
+  function reorderDays(newOrder) { S().update({ dayOrder: newOrder }); }
+
+  // החלפת מלון ליום
+  function setDayHotel(dayId, hotelItemId) { setDayField(dayId, 'sleepRef', hotelItemId); }
+
+  // עדכון עלות/כמות (נשמר ב-meta)
+  function setCost(itemId, cost, qty) {
+    const item = S().getItem(itemId);
+    const meta = Object.assign({}, item.meta || {});
+    if (cost != null) meta.cost = Number(cost) || 0;
+    if (qty != null) meta.qty = Number(qty) || 1;
+    setField(itemId, 'meta', meta);
   }
 
-  return { openDay: openDay, openItem: openItem };
+  // הוספת רשומת עלות חדשה בקטגוריה
+  function addCost(category, over) {
+    return addItem(Object.assign({
+      nameHe: 'עלות חדשה', type: 'cost', status: 'proposed',
+      meta: { cost: 0, qty: 1, costCat: category, costSource: 'manual' },
+    }, over || {}));
+  }
+
+  // ----- meta של הטיול (קונספט, גלריה) -----
+  function setMeta(key, value) {
+    const patch = {}; patch[key] = value;
+    S().update({ tripMeta: patch });
+  }
+  function addGalleryImage(dataUrl, caption) {
+    const gallery = (S().get().meta.gallery || []).slice();
+    gallery.push({ src: dataUrl, caption: caption || '' });
+    S().update({ tripMeta: { gallery } });
+  }
+  function removeGalleryImage(idx) {
+    const gallery = (S().get().meta.gallery || []).slice();
+    gallery.splice(idx, 1);
+    S().update({ tripMeta: { gallery } });
+  }
+
+  return {
+    setField, setPriority, setStatus, setText, setPeople, setCoordinates,
+    setDayField, addItem, deleteItem, moveItemToDay, reorderInDay, reorderDays, setDayHotel,
+    setCost, addCost, setMeta, addGalleryImage, removeGalleryImage,
+  };
 })();
