@@ -1,200 +1,191 @@
 // ============================================================
-// screens.js — the six work layers shown in the right-hand panel.
-// Each builder takes a view context and returns a DOM node.
-//   ctx = { model, state, days }   (days = filtered, each with .fpoints)
+//  screens.js — App.screens
+//  מרנדר את המסך הפעיל לתוך הפאנל, ומסנכרן את המפה.
+//  6 מסכים: planning · times · places · lodging · costs · summary
 // ============================================================
-window.Screens = (function () {
+window.App = window.App || {};
+App.screens = (function () {
 
-  function empty(msg) { return C.el('div.empty', { text: msg || 'אין מה להציג' }); }
+  const C = () => App.components;
+  const S = () => App.store;
+  let panel = null;
 
-  function stopRow(day, pt) {
-    return C.el('div.stop', {
-      on: { click: function () { window.Detail.openPlace(day, pt); } }
-    }, [
-      C.el('span.stop-time', { text: pt.time || '' }),
-      C.el('span.stop-dot', { style: 'background:' + window.MapView.colorFor(pt.type) }),
-      C.el('div.stop-body', null, [
-        C.el('div.stop-name', { text: pt.name || pt.nameEn || '' }),
-        C.el('div.stop-meta', { text: [window.TYPE_LABELS[pt.type] || pt.type, pt.duration, pt.forWho].filter(Boolean).join(' · ') })
-      ]),
-      pt.cost ? C.el('span.stop-cost', { text: window.C.yen(pt.cost) }) : null,
-      !pt.hasCoords ? C.el('span.stop-warn', { title: 'חסר מיקום', text: '⚠' }) : null
-    ]);
+  function setPanel(el) {
+    panel = el;
+    panel.addEventListener('click', onClick);
   }
 
-  function dayHeader(day) {
-    return C.el('div.day-head', { on: { click: function () { window.Detail.openDay(day); } } }, [
-      C.el('span.day-badge', { text: 'יום ' + day.gday }),
-      C.el('div.day-titles', null, [
-        C.el('div.day-title', { text: day.title || '' }),
-        day.subtitle ? C.el('div.day-sub', { text: day.subtitle }) : null,
-        day.area ? C.el('div.day-area', { text: '🧭 ' + day.area }) : null
-      ]),
-      day.experiencePhase ? C.el('span.phase phase-' + day.experiencePhase, { text: phaseLabel(day.experiencePhase) }) : null
-    ]);
+  function filtered() {
+    return App.filters.apply(S().allItems(), S().get().ui.filters);
+  }
+  function inSet(set) { const m = {}; set.forEach(i => m[i.id] = true); return m; }
+
+  function dayItems(day, allow) {
+    return (day.itemOrder || []).map(id => S().getItem(id)).filter(it => it && allow[it.id]);
   }
 
-  function phaseLabel(p) {
-    return { ascending: '↗ עולה', peak: '★ שיא', descending: '↘ יורד', rest: '☾ מנוחה' }[p] || p;
-  }
-
-  // ---- 1. PLANNING -------------------------------------------------
-  function planning(ctx) {
-    if (!ctx.days.length) return empty('אין ימים. הוסיפי נתונים בקבצי data/.');
-    return C.el('div.screen', null, ctx.days.map(function (day) {
-      return C.el('div.card.day-card', null, [
-        dayHeader(day),
-        day.story ? C.el('p.day-story', { text: day.story }) : null,
-        day.fpoints.length
-          ? C.el('div.stop-list', null, day.fpoints.map(function (p) { return stopRow(day, p); }))
-          : C.el('div.muted', { text: 'אין תחנות שמתאימות לסינון' })
-      ]);
-    }));
-  }
-
-  // ---- 2. TIMES ----------------------------------------------------
-  function times(ctx) {
-    if (!ctx.days.length) return empty();
-    return C.el('div.screen', null, ctx.days.map(function (day) {
-      return C.el('div.card', null, [
-        C.el('div.times-head', null, [
-          C.el('span.day-badge', { text: 'יום ' + day.gday }),
-          C.el('strong', { text: day.title || '' }),
-          C.el('span.muted', { text: '· קימה ' + (day.wakeUp || '—') })
-        ]),
-        C.el('div.timeline', null, day.fpoints.length ? day.fpoints.map(function (p) {
-          return C.el('div.tl-row', null, [
-            C.el('span.tl-time', { text: p.time || '' }),
-            C.el('span.tl-line', { style: 'background:' + window.MapView.colorFor(p.type) }),
-            C.el('div.tl-body', { on: { click: function () { window.Detail.openPlace(day, p); } } }, [
-              C.el('div.tl-name', { text: p.name || '' }),
-              C.el('div.tl-meta', { text: [p.duration, window.TYPE_LABELS[p.type] || p.type].filter(Boolean).join(' · ') })
-            ])
-          ]);
-        }) : [empty('אין תחנות')])
-      ]);
-    }));
-  }
-
-  // ---- 3. PLACES ---------------------------------------------------
-  function places(ctx) {
-    const all = [];
-    ctx.days.forEach(function (d) { d.fpoints.forEach(function (p) { all.push({ day: d, pt: p }); }); });
-    if (!all.length) return empty('אין מקומות שמתאימים לסינון');
-    const missing = all.filter(function (x) { return !x.pt.hasCoords; }).length;
-    return C.el('div.screen', null, [
-      C.el('div.places-count', { text: all.length + ' מקומות' + (missing ? ' · ' + missing + ' ללא מיקום' : '') }),
-      C.el('div.places-grid', null, all.map(function (x) {
-        return C.el('div.place-card', { on: { click: function () { window.Detail.openPlace(x.day, x.pt); } } }, [
-          C.el('span.chip', { style: 'background:' + window.MapView.colorFor(x.pt.type), text: window.TYPE_LABELS[x.pt.type] || x.pt.type }),
-          C.el('div.place-name', { text: x.pt.name || '' }),
-          C.el('div.place-en', { text: x.pt.nameEn || '' }),
-          C.el('div.place-meta', { text: 'יום ' + x.day.gday + (x.pt.time ? ' · ' + x.pt.time : '') }),
-          x.pt.cost ? C.el('div.place-cost', { text: window.C.yen(x.pt.cost) }) : null
-        ]);
-      }))
-    ]);
-  }
-
-  // ---- 4. LODGING --------------------------------------------------
-  function lodging(ctx) {
-    const cards = [];
-    ctx.model.trips.forEach(function (trip) {
-      (trip.lodging || []).forEach(function (l) {
-        cards.push(C.el('div.card.lodge-card', null, [
-          C.el('div.lodge-head', null, [
-            C.el('strong', { text: l.place + (l.placeEn ? ' · ' + l.placeEn : '') }),
-            C.el('span.chip.chip-soft', { text: l.type }),
-            l.nights ? C.el('span.muted', { text: l.nights + ' לילות' }) : null
-          ]),
-          l.rec ? C.el('div.lodge-rec', { text: '🏨 ' + l.rec }) : null,
-          C.el('div.lodge-times', { text: 'צ\'ק-אין ' + (l.checkIn || '—') + ' · צ\'ק-אאוט ' + (l.checkOut || '—') }),
-          l.luggageNote ? C.el('div.lodge-note', { text: '🧳 ' + l.luggageNote }) : null,
-          l.bookingUrl ? C.el('a.btn.btn-ghost', { href: l.bookingUrl, target: '_blank', rel: 'noopener', text: 'הזמנה ↗' }) : null
-        ]));
-      });
+  // ---------- planning ----------
+  function planning() {
+    const st = S().get();
+    const allow = inSet(filtered());
+    let html = '<div class="screen">';
+    st.dayOrder.forEach(did => {
+      const day = st.days[did];
+      const items = dayItems(day, allow);
+      const hotel = day.sleepRef ? S().getItem(day.sleepRef) : null;
+      html += C().dayCard(day, { sleepName: hotel ? hotel.nameHe : '' });
+      html += '<div class="day-items">';
+      html += items.length ? items.map(i => C().placeCard(i, { expandable: true })).join('')
+        : '<div class="muted" style="padding:6px 10px">אין תחנות שמתאימות לסינון</div>';
+      html += '</div>';
     });
-    if (!cards.length) return empty('עוד לא הוגדרה לינה');
-    return C.el('div.screen', null, cards);
+    html += '</div>';
+    return { html, mapItems: filtered().filter(i => i.type !== 'hotel') };
   }
 
-  // ---- 5. COSTS ----------------------------------------------------
-  function costs(ctx) {
+  // ---------- times ----------
+  function times() {
+    const st = S().get();
+    const allow = inSet(filtered());
+    let html = '<div class="screen">';
+    st.dayOrder.forEach(did => {
+      const day = st.days[did];
+      const items = dayItems(day, allow).slice().sort((a, b) =>
+        (a.recommendedTime || '').localeCompare(b.recommendedTime || ''));
+      html += '<div class="card"><div class="times-head"><span class="day-badge">יום ' + day.index + '</span>' +
+        '<strong>' + C().esc(day.title) + '</strong></div><div class="timeline">';
+      html += items.length ? items.map(i =>
+        '<div class="tl-row" data-detail="' + C().esc(i.id) + '">' +
+          '<span class="tl-time">' + C().esc(i.recommendedTime) + '</span>' +
+          '<span class="tl-line" style="background:' + App.map.colorFor(i.type) + '"></span>' +
+          '<div class="tl-body"><div class="tl-name">' + C().esc(i.nameHe) + '</div>' +
+          '<div class="tl-meta muted">' + [i.duration, C().TYPE_LABEL[i.type] || i.type].filter(Boolean).join(' · ') + '</div></div>' +
+        '</div>').join('') : '<div class="muted">אין תחנות</div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+    return { html, mapItems: filtered().filter(i => i.type !== 'hotel') };
+  }
+
+  // ---------- places ----------
+  function places() {
+    const set = filtered().filter(i => i.type !== 'hotel');
+    const missing = set.filter(i => !i.coordinates).length;
+    let html = '<div class="screen"><div class="places-count muted">' + set.length + ' מקומות' +
+      (missing ? ' · ' + missing + ' ללא מיקום' : '') + '</div><div class="places-grid">';
+    html += set.map(i => C().placeCard(i, { expandable: true })).join('');
+    html += '</div></div>';
+    return { html, mapItems: set };
+  }
+
+  // ---------- lodging ----------
+  function lodging() {
+    const st = S().get();
+    const hotels = S().allItems().filter(i => i.type === 'hotel');
+    let html = '<div class="screen">';
+    if (!hotels.length) html += '<div class="empty">עוד לא הוגדרה לינה</div>';
+    hotels.forEach(h => {
+      const day = h.dayId ? st.days[h.dayId] : null;
+      html += C().lodgingRow(h, day);
+    });
+    html += '</div>';
+    return { html, mapItems: hotels };
+  }
+
+  // ---------- costs ----------
+  function costs() {
+    const items = S().allItems();
     let activities = 0, stay = 0;
-    const rows = ctx.model.days.map(function (day) {
-      let a = 0; (day.timeline || []).forEach(function (it) { a += window.Normalize.num(it.cost); });
-      const s = day.sleep ? window.Normalize.num(day.sleep.cost) : 0;
-      activities += a; stay += s;
-      return C.el('div.cost-row', null, [
-        C.el('span.cost-day', { text: 'יום ' + day.gday }),
-        C.el('span.cost-title', { text: day.title || '' }),
-        C.el('span.cost-a', { text: window.C.yen(a) }),
-        C.el('span.cost-s', { text: window.C.yen(s) })
-      ]);
+    const rows = [];
+    items.forEach(i => {
+      const t = (Number(i.meta && i.meta.cost) || 0) * (Number(i.meta && i.meta.qty) || 1);
+      if (!t) return;
+      if (i.type === 'hotel') stay += t; else activities += t;
+      rows.push(i);
     });
     const total = activities + stay;
-    return C.el('div.screen', null, [
-      C.el('div.cost-summary', null, [
-        bigStat('סה"כ', window.C.yen(total)),
-        bigStat('פעילויות', window.C.yen(activities)),
-        bigStat('לינה', window.C.yen(stay))
-      ]),
-      C.el('div.card', null, [
-        C.el('div.cost-row.cost-head', null, [
-          C.el('span.cost-day', { text: '' }), C.el('span.cost-title', { text: 'יום' }),
-          C.el('span.cost-a', { text: 'פעילויות' }), C.el('span.cost-s', { text: 'לינה' })
-        ])
-      ].concat(rows)),
-      C.el('div.muted.cost-note', { text: 'הערכה לפי הנתונים שהוזנו. לא כולל טיסות, רכבות ארוכות וקניות אישיות.' })
-    ]);
+    let html = '<div class="screen">';
+    html += '<div class="cost-summary">' +
+      C().statBox(C().yen(total), 'סה"כ מוערך', '💴') +
+      C().statBox(C().yen(activities), 'פעילויות', '🎯') +
+      C().statBox(C().yen(stay), 'לינה', '🏨') + '</div>';
+    html += '<div class="card">';
+    rows.sort((a, b) => C().itemTotal(b) - C().itemTotal(a));
+    html += rows.map(i => C().costRow(i)).join('');
+    html += '</div>';
+    html += '<div class="muted cost-note">הערכה לפי הנתונים שהוזנו. לא כולל טיסות וקניות אישיות.</div>';
+    html += '</div>';
+    return { html, mapItems: [] };
   }
 
-  function bigStat(label, value) {
-    return C.el('div.stat', null, [C.el('div.stat-v', { text: value }), C.el('div.stat-l', { text: label })]);
+  // ---------- summary ----------
+  function summary() {
+    const st = S().get();
+    const items = S().allItems();
+    let total = 0; items.forEach(i => total += C().itemTotal(i));
+    const stops = items.filter(i => i.type !== 'hotel').length;
+    const trip = st.meta.kansai || st.meta[Object.keys(st.meta)[0]] || {};
+    let html = '<div class="screen">';
+    html += '<div class="cost-summary">' +
+      C().statBox(st.dayOrder.length, 'ימים', '📅') +
+      C().statBox(stops, 'מקומות', '📍') +
+      C().statBox(C().yen(total), 'עלות מוערכת', '💴') + '</div>';
+    html += '<div class="card"><h3>' + C().esc(trip.title || 'הטיול') + '</h3>' +
+      (trip.subtitle ? '<p class="muted">' + C().esc(trip.subtitle) + '</p>' : '') +
+      kv('עונה', trip.season) + kv('כניסה', trip.entry) + kv('יציאה', trip.exit) + kv('תחבורה', trip.transport) + '</div>';
+    html += '<div class="card"><h3>מסלול</h3>';
+    st.dayOrder.forEach(did => {
+      const d = st.days[did];
+      const n = (d.itemOrder || []).length;
+      html += '<div class="sum-day" data-goday="' + C().esc(did) + '">' +
+        '<span class="day-badge">' + d.index + '</span>' +
+        '<span class="sum-title">' + C().esc(d.title) + '</span>' +
+        '<span class="muted">' + n + ' תחנות</span></div>';
+    });
+    html += '</div></div>';
+    return { html, mapItems: [] };
   }
+  function kv(k, v) { return v ? '<div class="kv"><span class="kv-k">' + C().esc(k) + '</span><span class="kv-v">' + C().esc(v) + '</span></div>' : ''; }
 
-  // ---- 6. SUMMARY --------------------------------------------------
-  function summary(ctx) {
-    const m = ctx.model;
-    let stops = 0, total = 0;
-    m.days.forEach(function (d) { stops += (d.timeline || []).length; total += window.Normalize.dayCost(d); });
-    const trip = m.trips[0] || {};
-    return C.el('div.screen', null, [
-      C.el('div.cost-summary', null, [
-        bigStat('ימים', String(m.days.length)),
-        bigStat('מקומות', String(stops)),
-        bigStat('עלות מוערכת', window.C.yen(total))
-      ]),
-      C.el('div.card', null, [
-        C.el('h3', { text: trip.title || 'הטיול' }),
-        trip.subtitle ? C.el('p.muted', { text: trip.subtitle }) : null,
-        kv('עונה', trip.season), kv('כניסה', trip.entry), kv('יציאה', trip.exit), kv('תחבורה', trip.transport)
-      ]),
-      C.el('div.card', null, [C.el('h3', { text: 'מסלול' })].concat(
-        m.days.map(function (d) {
-          return C.el('div.sum-day', { on: { click: function () { window.Detail.openDay(d); } } }, [
-            C.el('span.day-badge', { text: d.gday }),
-            C.el('span.sum-title', { text: d.title || '' }),
-            C.el('span.muted', { text: (d.timeline || []).length + ' תחנות' })
-          ]);
-        })
-      ))
-    ]);
-  }
+  const MAP = { planning, times, places, lodging, costs, summary };
 
-  function kv(k, v) {
-    if (!v) return null;
-    return C.el('div.kv', null, [C.el('span.kv-k', { text: k }), C.el('span.kv-v', { text: v })]);
-  }
-
-  const MAP = { planning: planning, times: times, places: places, lodging: lodging, costs: costs, summary: summary };
-
-  function render(name, ctx, panel) {
-    C.clear(panel);
-    const fn = MAP[name] || planning;
-    panel.appendChild(fn(ctx));
+  function renderActive() {
+    if (!panel) return;
+    const screen = S().get().ui.activeScreen || 'planning';
+    const out = (MAP[screen] || planning)();
+    panel.innerHTML = out.html;
     panel.scrollTop = 0;
+    App.map.render(out.mapItems);
   }
 
-  return { render: render };
+  // ----- interactions -----
+  function onClick(e) {
+    const detail = e.target.closest('[data-detail]');
+    if (detail) { App.detail.open(detail.dataset.detail); return; }
+    const editday = e.target.closest('[data-editday]');
+    if (editday) { App.detail.openDay(editday.dataset.editday); return; }
+    const focus = e.target.closest('[data-focus]');
+    if (focus) { const it = S().getItem(focus.dataset.focus); App.map.focus(it); return; }
+    const goday = e.target.closest('[data-goday]');
+    if (goday) { S().setUi({ activeDayId: goday.dataset.goday, activeScreen: 'planning' }); return; }
+    const expand = e.target.closest('[data-expand]');
+    if (expand) {
+      const card = expand.closest('.place-card');
+      if (card) { const ex = card.querySelector('.card-expand'); if (ex) ex.classList.toggle('open'); }
+      return;
+    }
+  }
+
+  function selectItem(itemId) {
+    const it = S().getItem(itemId);
+    if (it) { App.map.focus(it); App.detail.open(itemId); }
+  }
+  function hoverItem(itemId) {
+    if (!panel) return;
+    panel.querySelectorAll('.is-hover').forEach(x => x.classList.remove('is-hover'));
+    const card = panel.querySelector('[data-item="' + itemId + '"]');
+    if (card) card.classList.add('is-hover');
+  }
+
+  return { setPanel, renderActive, selectItem, hoverItem };
 })();
