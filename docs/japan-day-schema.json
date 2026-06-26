@@ -1,0 +1,107 @@
+{
+  "title": "קנסאי",
+  "subtitle": "",
+  "season": "יולי–אוגוסט",
+  "entry": "",
+  "exit": "",
+  "transport": "",
+  "experienceCurve": "ascending | peak | descending | rest",
+  "lodging": [
+    {
+      "place": "",
+      "placeEn": "",
+      "nights": 0,
+      "type": "מלון | ריוקאן | מינשוקו | אירבנב",
+      "rec": "",
+      "bookingUrl": "",
+      "checkIn": "HH:MM",
+      "checkOut": "HH:MM",
+      "luggageNote": ""
+    }
+  ],
+  "days": [
+    {
+      "day": 1,
+      "title": "",
+      "subtitle": "",
+      "story": "",
+      "area": "A → B",
+      "isRestDay": false,
+      "experiencePhase": "ascending | peak | descending | rest",
+      "familyBalance": {
+        "anat": "נושא ספציפי שמתאים לה היום",
+        "ilay": "",
+        "lotem": "",
+        "natan": ""
+      },
+      "layers": {
+        "intellectual": "מה החוויה השכלית של היום",
+        "emotional": "מה החוויה הרגשית",
+        "physical": "מה החוויה הפיזית"
+      },
+      "drive": {
+        "time": "H:MM",
+        "km": 0,
+        "route": ""
+      },
+      "sleep": {
+        "place": "",
+        "placeEn": "",
+        "hotel": "",
+        "address": "",
+        "lat": 0,
+        "lng": 0,
+        "cost": 0,
+        "bookingUrl": "",
+        "checkIn": "15:00",
+        "checkOut": "11:00"
+      },
+      "wakeUp": "09:00",
+      "timeline": [
+        {
+          "time": "HH:MM",
+          "name": "",
+          "nameEn": "",
+          "duration": "",
+          "desc": "",
+          "whyThisPlace": "",
+          "type": "culture | nature | food | shopping | sport | walk | architecture | temple | market | workshop | view",
+          "forWho": "כולם | ענת | עילאי | לוטם | נתן",
+          "address": "",
+          "lat": 0,
+          "lng": 0,
+          "cost": 0
+        }
+      ],
+      "food": {
+        "vegetarian": "",
+        "iceCream": "",
+        "mustTry": ""
+      },
+      "shopping": {
+        "what": "",
+        "where": "",
+        "forWho": ""
+      },
+      "sports": [
+        {
+          "name": "",
+          "nameEn": "",
+          "desc": "",
+          "forWho": "",
+          "book": "",
+          "cost": 0
+        }
+      ],
+      "localGem": {
+        "name": "",
+        "nameEn": "",
+        "desc": "",
+        "why": ""
+      },
+      "skip": "",
+      "transportTip": "",
+      "tips": []
+    }
+  ]
+}
