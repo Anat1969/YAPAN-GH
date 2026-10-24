@@ -67,9 +67,12 @@ App.tabs = (function () {
     });
 
     // 8. איפוס
-    document.getElementById('btnReset').addEventListener('click', () => {
-      if (confirm('לאפס את כל השינויים והבחירות לברירת המחדל?')) App.store.reset();
-    });
+    // פעולות עריכה בתוך כפתור הלוגו A&I
+    const menu = document.querySelector('ai-menu');
+    if (menu) menu.items = [{
+      label: 'איפוס לברירת מחדל',
+      onSelect: () => { if (confirm('לאפס את כל השינויים והבחירות לברירת המחדל?')) App.store.reset(); },
+    }];
 
     // 9. מודאל
     document.getElementById('modalClose').addEventListener('click', closeModal);
